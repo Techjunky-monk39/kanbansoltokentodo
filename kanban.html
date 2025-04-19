@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kanban Task Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+    <style>
+        /* Custom styles for Kanban board elements */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f6; /* Light gray background */
+            margin: 0;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .kanban-board {
+            display: flex;
+            gap: 20px; /* Space between columns */
+            overflow-x: auto; /* Enable horizontal scrolling if needed */
+            padding-bottom: 20px;
+        }
+
+        .kanban-column {
+            flex: 1; /* Allow columns to grow */
+            min-width: 280px; /* Minimum width for columns */
+            background-color: #e2e8f0; /* Tailwind gray-200 */
+            border-radius: 8px; /* Rounded corners */
+            padding: 15px;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* Subtle shadow */
+            display: flex;
+            flex-direction: column;
+        }
+
+        .kanban-column h2 {
+            font-size: 1.25rem; /* Text size */
+            font-weight: bold; /* Bold font */
+            margin-bottom: 15px;
+            color: #2d3748; /* Dark gray text */
+            text-align: center;
+        }
+
+        .task-list {
+            flex-grow: 1; /* Allow task list to fill column height */
+            min-height: 100px; /* Ensure drop target area is visible */
+            padding: 10px; /* Padding inside the list */
+            border-radius: 4px; /* Rounded corners for the list area */
+            transition: background-color 0.3s ease; /* Smooth transition for drag feedback */
+            position: relative; /* Needed for positioning the insert line */
+        }
+
+        .task-card {
+            background-color: #ffffff; /* White background for tasks */
+            border-radius: 6px; /* Rounded corners for task cards */
+            padding: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* Small shadow */
+            cursor: grab; /* Indicate draggable item */
+            border: 1px solid #cbd5e0; /* Light border */
+            word-break: break-word; /* Prevent long words from overflowing */
+        }
+
+        .task-card:active {
+            cursor: grabbing; /* Indicate item is being dragged */
+        }
+
+        .task-card.dragging {
+            opacity: 0.5; /* Reduce opacity of the dragged item */
+        }
+
+        /* Style for the drop target when an item is dragged over */
+        .task-list.drag-over {
+            background-color: #bfdbfe; /* Tailwind blue-200 */
+        }
+
+        /* Visual indicator for insertion point */
+        .task-list .drag-insert-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background-color: #3b82f6; /* Tailwind blue-500 */
+            z-index: 1;
+            pointer-events: none; /* Allow events to pass through */
+        }
+
+         .task-list .drag-insert-line.after {
+             top: auto;
+             bottom: 0;
+         }
+
+
+        .add-task-form {
+            margin-bottom: 20px; /* Add space below the form */
+            display: flex;
+            gap: 10px;
+            max-width: 600px; /* Limit form width */
+            margin-left: auto;
+            margin-right: auto;
+            padding: 15px; /* Add padding around the form */
+            background-color: #e2e8f0; /* Match column background */
+            border-radius: 8px; /* Match column border-radius */
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); /* Match column shadow */
+        }
+
+        .add-task-form input[type="text"] {
+            flex-grow: 1; /* Allow input to fill available space */
+            padding: 8px;
+            border: 1px solid #cbd5e0; /* Light border */
+            border-radius: 4px; /* Rounded corners */
+            outline: none; /* Remove default outline */
+            transition: border-color 0.2s ease-in-out;
+        }
+
+        .add-task-form input[type="text"]:focus {
+            border-color: #4299e1; /* Highlight on focus */
+        }
+
+        .add-task-form button {
+            background-color: #4299e1; /* Tailwind blue-500 */
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px; /* Rounded corners */
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .add-task-form button:hover {
+            background-color: #3182ce; /* Darker blue on hover */
+        }
+
+        /* Confetti canvas will be added dynamically by the library */
+    </style>
+</head>
+<body>
+
+    <h1 class="text-2xl font-bold mb-6 text-center text-gray-800">Solana Token Creation Manual Steps</h1>
+
+    <div class="add-task-form">
+        <input type="text" id="new-task-input" placeholder="Add a new task...">
+        <button onclick="addTask()">Add Task</button>
+    </div>
+
+    <div class="kanban-board">
+        <div class="kanban-column" id="todo-column">
+            <h2>To Do 📋</h2>
+            <div class="task-list" id="todo-list" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+                </div>
+        </div>
+
+        <div class="kanban-column" id="inprogress-column">
+            <h2>In Progress 🚧</h2>
+            <div class="task-list" id="inprogress-list" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+                </div>
+        </div>
+
+        <div class="kanban-column" id="done-column">
+            <h2>Done ✅</h2>
+            <div class="task-list" id="done-list" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="drop(event)">
+                </div>
+        </div>
+    </div>
+
+
+
+    <script>
+        // Variable to store the currently dragged item
+        let draggedItem = null;
+
+        // Function to create a new task element
+        function createTaskElement(taskText) {
+            const taskCard = document.createElement('div');
+            taskCard.classList.add('task-card');
+            taskCard.setAttribute('draggable', true); // Make the element draggable
+            taskCard.textContent = taskText; // Set the task text
+            taskCard.addEventListener('dragstart', dragStart); // Add dragstart event listener
+            // Add dragend listener to clean up
+            taskCard.addEventListener('dragend', dragEnd);
+            return taskCard;
+        }
+
+        // Initialize board with steps from the Solana user manual file
+        function initializeBoard() {
+            const todoList = document.getElementById('todo-list');
+            const inprogressList = document.getElementById('inprogress-list');
+
+            // Steps extracted from the provided Solana user manual file
+            const todoTasks = [
+                "Step 1: Set Up Your Linux Machine",
+                "Step 2: Update System and Install Solana Tool Suite",
+                "Step 3: Create Your Solana Wallet",
+                "Step 4: Fund Your Wallet with SOL",
+                "Step 5: Install Development Prerequisites (Rust & Libraries)",
+                "Step 6: Install the Solana Program Library (SPL) Token CLI",
+                "Step 7: Create Your Token!",
+                "Step 8: Create an Account for Your Token",
+                "Step 9: Mint Your Tokens (Create the Supply)",
+                "Step 10: Check Your Token Balance",
+                "Step 11: Send Some Tokens (Optional)",
+                "Step 12: Prepare Your Assets (Logo)",
+                "Step 13: Fork the Solana Token List Repository (GitHub)",
+                "Step 14: Edit Your Forked Repository using GitHub's Web Editor",
+                "Step 15: Add Your Token Logo Asset to Repository",
+                "Step 16: Add Your Token Details to the JSON Registry File",
+                "Step 17: Commit Your Changes to Your Fork",
+                "Step 18: Create a Pull Request (PR) to the Official Repository",
+                "Step 19: Wait for Auto-Merge of Your PR",
+                "Step 20: Check Recognition on a Block Explorer (e.g., Solscan)"
+            ];
+
+            // Add initial tasks to the "To Do" list
+            todoTasks.forEach(task => todoList.appendChild(createTaskElement(task)));
+
+            // You can optionally add some initial tasks to the "In Progress" or "Done" lists here
+            // For now, we'll leave In Progress and Done empty initially
+        }
+
+        // --- Drag and Drop Event Handlers ---
+
+        // Called when dragging starts
+        function dragStart(event) {
+            draggedItem = event.target;
+            // Use a timeout to allow the element to be selected before adding the class
+            setTimeout(() => {
+                draggedItem.classList.add('dragging');
+            }, 0);
+        }
+
+        // Called when dragging ends (for cleanup)
+        function dragEnd(event) {
+             // Remove dragging class
+            event.target.classList.remove('dragging');
+            // Remove any insert lines
+            const insertLines = document.querySelectorAll('.drag-insert-line');
+            insertLines.forEach(line => line.remove());
+        }
+
+
+        // Called when a draggable element is dragged over a drop target
+        function dragOver(event) {
+            event.preventDefault(); // Prevent default to allow dropping
+            const targetList = event.target.closest('.task-list');
+
+            // Remove existing insert lines from all lists
+            document.querySelectorAll('.drag-insert-line').forEach(line => line.remove());
+
+            if (targetList && draggedItem && targetList !== draggedItem.parentElement) {
+                targetList.classList.add('drag-over');
+
+                // Determine where to place the insert line
+                const afterElement = getDragAfterElement(targetList, event.clientY);
+                const insertLine = document.createElement('div');
+                insertLine.classList.add('drag-insert-line');
+
+                if (afterElement == null) {
+                    // Insert at the end
+                    targetList.appendChild(insertLine);
+                    insertLine.classList.add('after'); // Style for end insertion
+                } else {
+                    // Insert before the determined element
+                    targetList.insertBefore(insertLine, afterElement);
+                }
+            }
+        }
+
+        // Helper function to determine where to insert the dragged element
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.task-card:not(.dragging)')];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                // Find the element where the cursor is closest to its top half
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+
+        // Called when a draggable element leaves a drop target
+        function dragLeave(event) {
+             // Remove the visual indicator from the drop target
+            const targetList = event.target.closest('.task-list');
+            if (targetList) {
+                targetList.classList.remove('drag-over');
+            }
+        }
+
+        // Called when a draggable element is dropped on a drop target
+        function drop(event) {
+            event.preventDefault();
+            const targetList = event.target.closest('.task-list');
+
+            // Remove the visual indicator from all potential drop targets and insert lines
+            document.querySelectorAll('.task-list').forEach(list => list.classList.remove('drag-over'));
+            document.querySelectorAll('.drag-insert-line').forEach(line => line.remove());
+
+
+            if (targetList && draggedItem) {
+                 // Determine the element to insert before based on the cursor position
+                const afterElement = getDragAfterElement(targetList, event.clientY);
+
+                if (afterElement == null) {
+                    // Insert at the end
+                    targetList.appendChild(draggedItem);
+                } else {
+                    // Insert before the determined element
+                    targetList.insertBefore(draggedItem, afterElement);
+                }
+
+                draggedItem.classList.remove('dragging'); // Remove dragging class
+
+                // If dropped into the 'Done' column, trigger confetti
+                if (targetList.id === 'done-list') {
+                    triggerConfetti();
+                }
+            }
+            draggedItem = null; // Reset dragged item
+        }
+
+        // --- Task Management Functions ---
+
+        // Function to add a new task from the input field
+        function addTask() {
+            const newTaskInput = document.getElementById('new-task-input');
+            const taskText = newTaskInput.value.trim(); // Get input value and remove whitespace
+
+            if (taskText) { // Only add if input is not empty
+                const todoList = document.getElementById('todo-list');
+                // Add new tasks to the beginning of the To Do list by default
+                todoList.insertBefore(createTaskElement(taskText), todoList.firstChild);
+                newTaskInput.value = ''; // Clear the input field
+            }
+        }
+
+        // --- Confetti Animation Function ---
+
+        // Triggers the confetti animation
+        function triggerConfetti() {
+            confetti({
+                particleCount: 100, // Number of confetti particles
+                spread: 70, // How wide the confetti spreads
+                origin: { y: 0.6 } // Origin of the confetti (slightly above center)
+            });
+        }
+
+        // Initialize the board with sample tasks when the page loads
+        window.onload = initializeBoard;
+
+    </script>
+
+</body>
+</html>
